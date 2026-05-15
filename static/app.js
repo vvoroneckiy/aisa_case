@@ -26,27 +26,120 @@ function renderChats() {
   list.innerHTML = "";
 
   for (const chat of state.chats) {
-    const el = document.createElement("button");
+    const el = document.createElement("div");
     el.className = "chat-item" + (chat.id === state.activeChatId ? " active" : "");
-    el.type = "button";
-
+    
+    // Контейнер для содержимого чата
+    const content = document.createElement("div");
+    content.className = "chat-content";
+    
+    // Верхняя строка: название и кнопка удаления
+    const headerRow = document.createElement("div");
+    headerRow.className = "chat-header-row";
+    
     const title = document.createElement("div");
     title.className = "title";
     title.textContent = chat.title || "Новый чат";
-
+    
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "delete-chat-btn";
+    deleteBtn.innerHTML = "✕";
+    deleteBtn.title = "Удалить чат";
+    deleteBtn.onclick = (e) => {
+      e.stopPropagation();
+      deleteChat(chat.id);
+    };
+    
+    headerRow.appendChild(title);
+    headerRow.appendChild(deleteBtn);
+    
+    // Дата создания
     const meta = document.createElement("div");
     meta.className = "meta";
     meta.textContent = formatDate(chat.created_at);
-
-    el.appendChild(title);
-    el.appendChild(meta);
+    
+    content.appendChild(headerRow);
+    content.appendChild(meta);
+    el.appendChild(content);
+    
     el.addEventListener("click", () => openChat(chat.id));
-
     list.appendChild(el);
   }
 }
 
-function renderMessages(messages) {
+async function deleteChat(chatId) {
+  // Находим название чата для подтверждения
+  const chat = state.chats.find(c => c.id === chatId);
+  const chatTitle = chat?.title || "Новый чат";
+  
+  // Подтверждение удаления
+  if (!confirm(`Вы уверены, что хотите удалить чат "${chatTitle}"? Все сообщения будут потеряны.`)) {
+    return;
+  }
+  
+  setStatus("Удаление...");
+  
+  try {
+    // Отправляем запрос на удаление
+    const response = await fetch(`/api/chats/${chatId}`, { method: "DELETE" });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || "Ошибка удаления");
+    }
+    
+    // Удаляем чат из списка
+    const index = state.chats.findIndex(c => c.id === chatId);
+    if (index !== -1) {
+      state.chats.splice(index, 1);
+    }
+    
+    // Если удалили активный чат, переключаемся на другой
+    if (state.activeChatId === chatId) {
+      if (state.chats.length > 0) {
+        await openChat(state.chats[0].id);
+      } else {
+        state.activeChatId = null;
+        await createChat();
+      }
+    }
+    
+    renderChats();
+    setStatus("Чат удалён");
+    setTimeout(() => setStatus(""), 2000);
+  } catch (e) {
+    setStatus(String(e.message || e));
+    setTimeout(() => setStatus(""), 3000);
+  }
+}
+
+// Функция для рендеринга Markdown и формул
+function renderMarkdownWithMath(content) {
+  // Сначала рендерим Markdown в HTML
+  const html = marked.parse(content);
+  
+  // Создаём временный контейнер
+  const temp = document.createElement('div');
+  temp.innerHTML = html;
+  
+  // Рендерим формулы KaTeX
+  if (typeof renderMathInElement === 'function') {
+    renderMathInElement(temp, {
+      delimiters: [
+        {left: '$$', right: '$$', display: true},
+        {left: '$', right: '$', display: false},
+        {left: '\\(', right: '\\)', display: false},
+        {left: '\\[', right: '\\]', display: true}
+      ],
+      throwOnError: false,
+      errorColor: '#cc0000'
+    });
+  }
+  
+  return temp.innerHTML;
+}
+
+async function renderMessages(messages) {
   const box = $("messages");
   box.innerHTML = "";
 
@@ -60,11 +153,20 @@ function renderMessages(messages) {
 
     const bubble = document.createElement("div");
     bubble.className = "bubble " + (m.role === "user" ? "user" : "assistant");
-    bubble.textContent = m.content;
+
+    if (m.role === "user") {
+      bubble.textContent = m.content;
+    } else {
+      try {
+        bubble.innerHTML = renderMarkdownWithMath(m.content);
+      } catch (e) {
+        console.error("Render error:", e);
+        bubble.textContent = m.content;
+      }
+    }
 
     row.appendChild(avatar);
     row.appendChild(bubble);
-
     box.appendChild(row);
   }
 
@@ -100,7 +202,7 @@ async function createChat() {
   state.activeChatId = chat.id;
   renderChats();
   $("chatTitle").textContent = chat.title || "Новый чат";
-  renderMessages([]);
+  await renderMessages([]);
 }
 
 async function openChat(chatId) {
@@ -113,7 +215,7 @@ async function openChat(chatId) {
   setStatus("Загрузка…");
   try {
     const messages = await api("GET", `/api/chats/${encodeURIComponent(chatId)}/messages`);
-    renderMessages(messages);
+    await renderMessages(messages);
   } finally {
     setStatus("");
   }
@@ -141,7 +243,7 @@ async function sendCurrent() {
   try {
     const messages = await api("GET", `/api/chats/${encodeURIComponent(chatId)}/messages`);
     messages.push({ role: "user", content: text });
-    renderMessages(messages);
+    await renderMessages(messages);
     input.value = "";
     input.style.height = "";
 
@@ -152,7 +254,7 @@ async function sendCurrent() {
     renderChats();
 
     const updated = await api("GET", `/api/chats/${encodeURIComponent(chatId)}/messages`);
-    renderMessages(updated);
+    await renderMessages(updated);
   } catch (e) {
     setStatus(String(e.message || e));
   } finally {

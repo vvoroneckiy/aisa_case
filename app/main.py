@@ -110,6 +110,20 @@ async def create_chat(payload: CreateChatIn, request: Request):
     return _chat_to_out(chat)
 
 
+@app.delete("/api/chats/{chat_id}")
+async def delete_chat(chat_id: str, request: Request):
+    state: AppState = request.app.state.state
+    async with session_scope(state.session_factory) as session:
+        chat = await session.get(Chat, chat_id)
+        if not chat:
+            raise HTTPException(status_code=404, detail="Чат не найден")
+        
+        await session.delete(chat)
+        await session.commit()
+        
+        return {"status": "deleted", "id": chat_id}
+
+
 @app.get("/api/chats/{chat_id}/messages", response_model=list[MessageOut])
 async def list_messages(chat_id: str, request: Request):
     state: AppState = request.app.state.state
