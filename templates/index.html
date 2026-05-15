@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GigaChat UI</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <div class="brand">GigaChat UI</div>
+          <button class="btn" id="newChatBtn" type="button">Новый чат</button>
+        </div>
+        <div class="chat-list" id="chatList"></div>
+      </aside>
+
+      <main class="main">
+        <div class="topbar">
+          <div class="chat-title" id="chatTitle">Чат</div>
+          <div class="status" id="status"></div>
+        </div>
+
+        <div class="messages" id="messages"></div>
+
+        <form class="composer" id="composer">
+          <textarea
+            class="input"
+            id="messageInput"
+            rows="1"
+            placeholder="Напишите сообщение…"
+          ></textarea>
+          <button class="send" id="sendBtn" type="submit">Отправить</button>
+        </form>
+      </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
