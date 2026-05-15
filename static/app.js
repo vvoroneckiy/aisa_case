@@ -21,12 +21,6 @@ function setStatus(text) {
   $("status").textContent = text || "";
 }
 
-function escapeHtml(s) {
-  const div = document.createElement("div");
-  div.textContent = s;
-  return div.innerHTML;
-}
-
 function renderChats() {
   const list = $("chatList");
   list.innerHTML = "";
@@ -66,7 +60,7 @@ function renderMessages(messages) {
 
     const bubble = document.createElement("div");
     bubble.className = "bubble " + (m.role === "user" ? "user" : "assistant");
-    bubble.innerHTML = escapeHtml(m.content);
+    bubble.textContent = m.content;
 
     row.appendChild(avatar);
     row.appendChild(bubble);

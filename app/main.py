@@ -16,7 +16,7 @@ from app.db import create_engine, create_session_factory, session_scope
 from app.gigachat import GigaChatClient
 from app.models import Base, Chat, Message
 from app.schemas import ChatOut, CreateChatIn, MessageOut, SendMessageIn
-from app.settings import Settings, get_settings
+from app.settings import get_settings
 
 
 def _ensure_parent_dir(db_path: str) -> None:
@@ -33,14 +33,14 @@ def _message_to_out(msg: Message) -> MessageOut:
     return MessageOut(
         id=msg.id,
         chat_id=msg.chat_id,
-        role=msg.role,  # type: ignore[arg-type]
+        role=msg.role,
         content=msg.content,
         created_at=msg.created_at,
     )
 
 
 class AppState:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings) -> None:
         self.settings = settings
         self.engine: AsyncEngine = create_engine(settings.db_path)
         self.session_factory: async_sessionmaker[AsyncSession] = create_session_factory(self.engine)
@@ -55,7 +55,7 @@ class AppState:
         )
 
 
-def _require_gigachat_config(settings: Settings) -> None:
+def _require_gigachat_config(settings) -> None:
     if not settings.gigachat_client_id or not settings.gigachat_client_secret:
         raise HTTPException(
             status_code=500,
