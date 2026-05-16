@@ -29,11 +29,9 @@ function renderChats() {
     const el = document.createElement("div");
     el.className = "chat-item" + (chat.id === state.activeChatId ? " active" : "");
     
-    // Контейнер для содержимого чата
     const content = document.createElement("div");
     content.className = "chat-content";
     
-    // Верхняя строка: название и кнопка удаления
     const headerRow = document.createElement("div");
     headerRow.className = "chat-header-row";
     
@@ -53,7 +51,6 @@ function renderChats() {
     headerRow.appendChild(title);
     headerRow.appendChild(deleteBtn);
     
-    // Дата создания
     const meta = document.createElement("div");
     meta.className = "meta";
     meta.textContent = formatDate(chat.created_at);
@@ -68,11 +65,9 @@ function renderChats() {
 }
 
 async function deleteChat(chatId) {
-  // Находим название чата для подтверждения
   const chat = state.chats.find(c => c.id === chatId);
   const chatTitle = chat?.title || "Новый чат";
   
-  // Подтверждение удаления
   if (!confirm(`Вы уверены, что хотите удалить чат "${chatTitle}"? Все сообщения будут потеряны.`)) {
     return;
   }
@@ -80,7 +75,6 @@ async function deleteChat(chatId) {
   setStatus("Удаление...");
   
   try {
-    // Отправляем запрос на удаление
     const response = await fetch(`/api/chats/${chatId}`, { method: "DELETE" });
     
     if (!response.ok) {
@@ -88,13 +82,11 @@ async function deleteChat(chatId) {
       throw new Error(error.detail || "Ошибка удаления");
     }
     
-    // Удаляем чат из списка
     const index = state.chats.findIndex(c => c.id === chatId);
     if (index !== -1) {
       state.chats.splice(index, 1);
     }
     
-    // Если удалили активный чат, переключаемся на другой
     if (state.activeChatId === chatId) {
       if (state.chats.length > 0) {
         await openChat(state.chats[0].id);
@@ -115,8 +107,16 @@ async function deleteChat(chatId) {
 
 // Функция для рендеринга Markdown и формул
 function renderMarkdownWithMath(content) {
-  // Сначала рендерим Markdown в HTML
-  const html = marked.parse(content);
+  let processedContent = content;
+  
+  // Преобразуем C_n^k в \binom{n}{k} для KaTeX
+  processedContent = processedContent.replace(/C_\{([^}]+)\}\^\{([^}]+)\}/g, '\\binom{$1}{$2}');
+  processedContent = processedContent.replace(/C_([a-zA-Z0-9]+)\^([a-zA-Z0-9]+)/g, '\\binom{$1}{$2}');
+  processedContent = processedContent.replace(/C_\{([^}]+)\}\^([a-zA-Z0-9]+)/g, '\\binom{$1}{$2}');
+  processedContent = processedContent.replace(/C_([a-zA-Z0-9]+)\^\{([^}]+)\}/g, '\\binom{$1}{$2}');
+  
+  // Рендерим Markdown в HTML
+  const html = marked.parse(processedContent);
   
   // Создаём временный контейнер
   const temp = document.createElement('div');
@@ -132,11 +132,45 @@ function renderMarkdownWithMath(content) {
         {left: '\\[', right: '\\]', display: true}
       ],
       throwOnError: false,
-      errorColor: '#cc0000'
+      errorColor: '#e74c3c'
     });
   }
   
   return temp.innerHTML;
+}
+
+// Показать индикатор загрузки (печатает)
+function showTypingIndicator() {
+  const box = $("messages");
+  const indicator = document.createElement("div");
+  indicator.className = "msg";
+  indicator.id = "typing-indicator";
+  
+  const avatar = document.createElement("div");
+  avatar.className = "avatar";
+  avatar.textContent = "AI";
+  
+  const bubble = document.createElement("div");
+  bubble.className = "bubble assistant";
+  
+  const typingDots = document.createElement("div");
+  typingDots.className = "typing-indicator";
+  typingDots.innerHTML = '<div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>';
+  
+  bubble.appendChild(typingDots);
+  indicator.appendChild(avatar);
+  indicator.appendChild(bubble);
+  
+  box.appendChild(indicator);
+  box.scrollTop = box.scrollHeight;
+}
+
+// Скрыть индикатор загрузки
+function hideTypingIndicator() {
+  const indicator = document.getElementById("typing-indicator");
+  if (indicator) {
+    indicator.remove();
+  }
 }
 
 async function renderMessages(messages) {
@@ -238,7 +272,8 @@ async function sendCurrent() {
 
   const chatId = state.activeChatId;
   setLoading(true);
-  setStatus("Думаю…");
+  setStatus("Думаю...");
+  showTypingIndicator();
 
   try {
     const messages = await api("GET", `/api/chats/${encodeURIComponent(chatId)}/messages`);
@@ -258,6 +293,7 @@ async function sendCurrent() {
   } catch (e) {
     setStatus(String(e.message || e));
   } finally {
+    hideTypingIndicator();
     setLoading(false);
     setTimeout(() => setStatus(""), 2500);
   }
