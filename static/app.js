@@ -21,6 +21,26 @@ function setStatus(text) {
   $("status").textContent = text || "";
 }
 
+// Упрощённое приветственное окно
+function showWelcomeScreen() {
+  const box = $("messages");
+  box.innerHTML = `
+    <div class="welcome-container">
+      <div class="welcome-icon">🤖</div>
+      <h1 class="welcome-title">Добро пожаловать в GigaChat UI!</h1>
+      <p class="welcome-description">
+        Ваш интеллектуальный помощник на основе нейросети GigaChat
+      </p>
+    </div>
+  `;
+}
+
+window.sendExample = async function(question) {
+  const input = $("messageInput");
+  input.value = question;
+  await sendCurrent();
+};
+
 function renderChats() {
   const list = $("chatList");
   list.innerHTML = "";
@@ -105,24 +125,17 @@ async function deleteChat(chatId) {
   }
 }
 
-// Функция для рендеринга Markdown и формул
 function renderMarkdownWithMath(content) {
   let processedContent = content;
-  
-  // Преобразуем C_n^k в \binom{n}{k} для KaTeX
   processedContent = processedContent.replace(/C_\{([^}]+)\}\^\{([^}]+)\}/g, '\\binom{$1}{$2}');
   processedContent = processedContent.replace(/C_([a-zA-Z0-9]+)\^([a-zA-Z0-9]+)/g, '\\binom{$1}{$2}');
   processedContent = processedContent.replace(/C_\{([^}]+)\}\^([a-zA-Z0-9]+)/g, '\\binom{$1}{$2}');
   processedContent = processedContent.replace(/C_([a-zA-Z0-9]+)\^\{([^}]+)\}/g, '\\binom{$1}{$2}');
   
-  // Рендерим Markdown в HTML
   const html = marked.parse(processedContent);
-  
-  // Создаём временный контейнер
   const temp = document.createElement('div');
   temp.innerHTML = html;
   
-  // Рендерим формулы KaTeX
   if (typeof renderMathInElement === 'function') {
     renderMathInElement(temp, {
       delimiters: [
@@ -139,7 +152,6 @@ function renderMarkdownWithMath(content) {
   return temp.innerHTML;
 }
 
-// Показать индикатор загрузки (печатает)
 function showTypingIndicator() {
   const box = $("messages");
   const indicator = document.createElement("div");
@@ -165,7 +177,6 @@ function showTypingIndicator() {
   box.scrollTop = box.scrollHeight;
 }
 
-// Скрыть индикатор загрузки
 function hideTypingIndicator() {
   const indicator = document.getElementById("typing-indicator");
   if (indicator) {
@@ -175,6 +186,12 @@ function hideTypingIndicator() {
 
 async function renderMessages(messages) {
   const box = $("messages");
+  
+  if (!messages || messages.length === 0) {
+    showWelcomeScreen();
+    return;
+  }
+  
   box.innerHTML = "";
 
   for (const m of messages) {
@@ -226,8 +243,22 @@ async function api(method, url, body) {
 }
 
 async function loadChats() {
-  state.chats = await api("GET", "/api/chats");
-  renderChats();
+  try {
+    state.chats = await api("GET", "/api/chats");
+    renderChats();
+    
+    if (state.activeChatId && !state.chats.find(c => c.id === state.activeChatId)) {
+      state.activeChatId = null;
+      if (state.chats.length > 0) {
+        await openChat(state.chats[0].id);
+      } else {
+        await createChat();
+      }
+    }
+  } catch (e) {
+    console.error("Error loading chats:", e);
+    setStatus("Ошибка загрузки чатов");
+  }
 }
 
 async function createChat() {
@@ -240,16 +271,27 @@ async function createChat() {
 }
 
 async function openChat(chatId) {
+  const chat = state.chats.find((c) => c.id === chatId);
+  if (!chat) {
+    await createChat();
+    return;
+  }
+  
   state.activeChatId = chatId;
   renderChats();
-
-  const chat = state.chats.find((c) => c.id === chatId);
-  $("chatTitle").textContent = (chat && chat.title) || "Чат";
+  $("chatTitle").textContent = chat.title || "Чат";
 
   setStatus("Загрузка…");
   try {
     const messages = await api("GET", `/api/chats/${encodeURIComponent(chatId)}/messages`);
     await renderMessages(messages);
+  } catch (e) {
+    console.error("Error loading messages:", e);
+    if (e.message.includes("404")) {
+      await createChat();
+    } else {
+      setStatus("Ошибка загрузки");
+    }
   } finally {
     setStatus("");
   }
